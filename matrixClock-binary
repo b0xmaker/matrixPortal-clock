@@ -12,8 +12,16 @@ from adafruit_bitmap_font import bitmap_font
 from adafruit_matrixportal.network import Network
 from adafruit_matrixportal.matrix import Matrix
 
-BLINK = False
+BLINK = True
 DEBUG = False
+
+from analogio import AnalogIn
+analog_in= AnalogIn(board.A4)
+
+def get_voltage(pin):
+    return (pin.value * 3.3) / 65536
+    
+lightThreshold = 1
 
 # Get wifi details and more from a secrets.py file
 try:
@@ -72,7 +80,7 @@ def update_time(*, hours=None, minutes=None, seconds=None, show_colon=False):
     if BLINK:
         colon = ":" if show_colon or now[5] % 2 else " "
     else:
-        colon = " "
+        colon = ":"
 
     clock_label.text = "{hours}{colon}{minutes:02d}{colon}{seconds}".format(
         hours=hours, minutes=minutes, seconds=seconds, colon=colon
@@ -91,15 +99,24 @@ update_time(show_colon=True)  # Display whatever time is on the board
 group.append(clock_label)  # add the clock label to the group
 
 while True:
-    if last_check is None or time.monotonic() > last_check + 3600:
-        try:
-            update_time(
-                show_colon=True
-            )  # Make sure a colon is displayed while updating
-            network.get_local_time()  # Synchronize Board's clock to Internet
-            last_check = time.monotonic()
-        except RuntimeError as e:
-            print("Some error occured, retrying! -", e)
+    
+    # if the ambient light is above the set threshold... work normally
+    if get_voltage(analog_in) > lightThreshold:
+        color[0] = 0x000000  # black background
+        color[1] = 0xFF0000  # red
+        if last_check is None or time.monotonic() > last_check + 3600:
+            try:
+                update_time(
+                    show_colon=True
+                )  # Make sure a colon is displayed while updating
+                network.get_local_time()  # Synchronize Board's clock to Internet
+                last_check = time.monotonic()
+            except RuntimeError as e:
+                print("Some error occured, retrying! -", e)
+    
+    else:
+        color[0] = 0x000000  # black background
+        color[1] = 0x000000  # black font
 
     update_time()
     time.sleep(1)
